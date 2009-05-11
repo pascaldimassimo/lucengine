@@ -1,0 +1,137 @@
+<project name="lucengine" default="compile">
+
+	<property file="build.properties" />
+
+	<property name="classes.dir" value="${basedir}/classes" />
+	<property name="tests.classes.dir" value="${classes.dir}/tests" />
+
+	<import file="${sdk.dir}/config/user/ant-macros.xml" />
+
+	<path id="project.classpath">
+		<pathelement path="war/WEB-INF/classes" />
+		<fileset dir="${sdk.dir}/lib/user">
+			<include name="**/*.jar" />
+		</fileset>
+		<fileset dir="${sdk.dir}/lib">
+			<include name="shared/**/*.jar" />
+		</fileset>
+		<fileset dir="${spring.dir}">
+			<include name="dist/*.jar" />
+		</fileset>
+		<fileset dir="${lucene.dir}">
+			<include name="*.jar" />
+		</fileset>
+	</path>
+
+	<path id="test.classpath">
+		<pathelement path="${tests.classes.dir}" />
+		<path refid="project.classpath" />
+		<fileset dir="${junit.dir}">
+			<include name="*.jar" />
+		</fileset>
+		<fileset dir="${sdk.dir}/lib">
+			<include name="impl/**/*.jar" />
+		</fileset>
+	</path>
+
+	<path id="tools.classpath">
+		<path refid="project.classpath" />
+		<pathelement location="${sdk.dir}/lib/appengine-tools-api.jar" />
+		<fileset dir="${sdk.dir}/lib/tools">
+			<include name="**/asm-*.jar" />
+			<include name="**/datanucleus-enhancer-*.jar" />
+		</fileset>
+	</path>
+
+
+	<target name="clean" description="Force a clean slate to rebuild">
+		<delete dir="war" />
+		<delete dir="${classes.dir}" />
+	</target>
+
+	<target name="copyjars" description="Copies the App Engine JARs to the WAR.">
+		<mkdir dir="war/WEB-INF/lib" />
+		<copy todir="war/WEB-INF/lib" flatten="true">
+			<fileset dir="${sdk.dir}/lib/user">
+				<include name="**/*.jar" />
+			</fileset>
+			<fileset dir="${spring.dir}">
+				<include name="dist/*.jar" />
+			</fileset>
+			<fileset dir="${lucene.dir}">
+				<include name="*.jar" />
+			</fileset>
+			<fileset dir="${commons-logging.dir}">
+				<include name="commons-logging-1.1.1.jar" />
+			</fileset>
+		</copy>
+	</target>
+
+	<target name="compile" depends="copyjars" description="Compiles Java source and copies other source files to the WAR.">
+		<mkdir dir="war/WEB-INF/classes" />
+		<copy todir="war/WEB-INF/classes">
+			<fileset dir="src">
+				<exclude name="**/*.java" />
+			</fileset>
+		</copy>
+		<copy todir="war">
+			<fileset dir="web" />
+		</copy>
+		<javac srcdir="src" destdir="war/WEB-INF/classes" classpathref="project.classpath" debug="on" />
+	</target>
+
+	<target name="compile-test" depends="datanucleusenhance" description="Compile the tests">
+		<mkdir dir="${tests.classes.dir}" />
+		<javac srcdir="test" destdir="${tests.classes.dir}" classpathref="test.classpath" />
+	</target>
+
+	<target name="test" depends="compile-test" description="Execute tests">
+		<junit printsummary="yes" haltonfailure="yes" fork="no">
+			<classpath refid="test.classpath" />
+			<batchtest>
+				<fileset dir="${tests.classes.dir}">
+					<include name="**/*Test*.class" />
+					<exclude name="**/AllTests.class" />
+					<exclude name="**/*Test*$$*" />
+					<exclude name="**/*JdoTest*" />
+				</fileset>
+			</batchtest>
+		</junit>
+	</target>
+
+	<target name="datanucleusenhance" depends="compile" description="Performs enhancement on compiled data classes.">
+		<taskdef name="datanucleusenhancer" classpathref="tools.classpath" classname="org.datanucleus.enhancer.tools.EnhancerTask" />
+		<datanucleusenhancer classpathref="tools.classpath" failonerror="true">
+			<fileset dir="war/WEB-INF/classes" includes="**/*.class" />
+		</datanucleusenhancer>
+	</target>
+
+	<target name="runserver" depends="datanucleusenhance" description="Starts the development server.">
+		<dev_appserver war="war" />
+	</target>
+
+	<target name="update" depends="datanucleusenhance" description="Uploads the application to App Engine.">
+		<appcfg action="update" war="war" />
+	</target>
+
+	<target name="update_indexes" depends="datanucleusenhance" description="Uploads just the datastore index configuration to App Engine.">
+		<appcfg action="update_indexes" war="war" />
+	</target>
+
+	<target name="rollback" depends="datanucleusenhance" description="Rolls back an interrupted application update.">
+		<appcfg action="rollback" war="war" />
+	</target>
+
+	<target name="request_logs" description="Downloads log data from App Engine for the application.">
+		<appcfg action="request_logs" war="war">
+			<options>
+				<arg value="--num_days=5" />
+			</options>
+			<args>
+				<arg value="logs.txt" />
+			</args>
+		</appcfg>
+	</target>
+
+</project>
+
